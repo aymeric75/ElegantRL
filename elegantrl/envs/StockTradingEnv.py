@@ -8,12 +8,19 @@ ARY = np.ndarray
 
 
 class StockTradingEnv:
-    def __init__(self, initial_amount=1e6, max_stock=1e2, cost_pct=1e-3, gamma=0.99,
-                 beg_idx=0, end_idx=1113):
-        self.df_pwd = './China_A_shares.pandas.dataframe'
-        self.npz_pwd = './China_A_shares.numpy.npz'
+    def __init__(
+        self, 
+        initial_amount=1e6, 
+        max_stock=1e2, 
+        cost_pct=1e-3, 
+        gamma=0.99,
+        beg_idx=0, 
+        end_idx=1113
+        ):
+        # self.df_pwd = './China_A_shares.pandas.dataframe'
+        # self.npz_pwd = './China_A_shares.numpy.npz'
 
-        self.close_ary, self.tech_ary = self.load_data_from_disk()
+        #self.close_ary, self.tech_ary = self.load_data_from_disk()
         self.close_ary = self.close_ary[beg_idx:end_idx]
         self.tech_ary = self.tech_ary[beg_idx:end_idx]
         # print(f"| StockTradingEnv: close_ary.shape {self.close_ary.shape}")
@@ -157,14 +164,27 @@ def _inplace_amount_shares_when_sell(amount, shares, stock_action, close, cost_r
 
 
 class StockTradingVecEnv:
-    def __init__(self, initial_amount=1e6, max_stock=1e2, cost_pct=1e-3, gamma=0.99,
-                 beg_idx=0, end_idx=1113, num_envs=4, gpu_id=0):
+    def __init__(
+        self, 
+        initial_amount=1e6, 
+        max_stock=1e2, 
+        cost_pct=1e-3, 
+        gamma=0.99,
+        beg_idx=0, 
+        end_idx=1113, 
+        num_envs=4, 
+        gpu_id=0,
+        close_ary = None,
+        tech_ary = None
+        ):
+
+
         self.df_pwd = './elegantrl/envs/China_A_shares.pandas.dataframe'
         self.npz_pwd = './elegantrl/envs/China_A_shares.numpy.npz'
         self.device = th.device(f"cuda:{gpu_id}" if (th.cuda.is_available() and (gpu_id >= 0)) else "cpu")
 
         '''load data'''
-        close_ary, tech_ary = self.load_data_from_disk()
+        #close_ary, tech_ary = self.load_data_from_disk()
         close_ary = close_ary[beg_idx:end_idx]
         tech_ary = tech_ary[beg_idx:end_idx]
         self.close_price = th.tensor(close_ary, dtype=th.float32, device=self.device)
@@ -231,7 +251,7 @@ class StockTradingVecEnv:
 
         self.rewards = list()
         self.total_asset = self.vmap_get_total_asset(self.close_price[self.day], self.shares, self.amount)
-        return self.get_state()
+        return self.get_state(), ()
 
     def get_state(self):
         return self.vmap_get_state((self.amount * 2 ** -18).tanh(),
@@ -243,6 +263,10 @@ class StockTradingVecEnv:
         self.day += 1
         if self.day == 1:
             self.cumulative_returns = 0.
+
+        if self.day > len(self.close_price) - 1:
+            self.day = len(self.close_price) - 1
+
 
         # action = action.clone()
         action = th.ones_like(action)
@@ -310,7 +334,8 @@ class StockTradingVecEnv:
 
         state = self.reset() if done else self.get_state()  # automatically reset in vectorized env
         done = th.tensor(done, dtype=th.bool, device=self.device).expand(self.num_envs)
-        return state, reward, done, ()
+        truncated = th.tensor(False, dtype=th.bool, device=self.device).expand(self.num_envs)
+        return state, reward, done, truncated, ()
 
     def load_data_from_disk(self, tech_id_list=None):
         tech_id_list = [

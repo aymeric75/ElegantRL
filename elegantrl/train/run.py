@@ -385,10 +385,13 @@ class Worker(Process):
         
         
         '''init agent.last_state'''
-        #state, info_dict = env.reset()
-        state = env.reset().astype(np.float16)
+        #state, info_dict = env.reset()   .astype(np.float16)
+        state, info_dict = env.reset()
 
-
+        print("OULAH !!!!")
+        print(state.shape)
+        print(args.state_dim)
+        print(args.num_envs)
         if args.num_envs == 1:
             assert state.shape == (args.state_dim,)
             assert isinstance(state, np.ndarray)
