@@ -49,7 +49,8 @@ def train_agent_single_process(args: Config):
         agent.save_or_load_agent(args.cwd, if_save=False)
 
     '''init agent.last_state'''
-    state, info_dict = env.reset()
+    #state, info_dict = env.reset()
+    state = env.reset().astype(float16)
     if args.num_envs == 1:
         assert state.shape == (args.state_dim,)
         assert isinstance(state, np.ndarray)
@@ -247,7 +248,6 @@ class Learner(Process):
                 state_dim=args.state_dim,
                 action_dim=1 if args.if_discrete else args.action_dim,
                 if_use_per=args.if_use_per,
-                if_discrete=args.if_discrete,
                 args=args,
             )
         else:
@@ -273,7 +273,7 @@ class Learner(Process):
 
         states = th.zeros((horizon_len, num_seqs, state_dim), dtype=th.float32, device=agent.device)
         actions = th.zeros((horizon_len, num_seqs, action_dim), dtype=th.float32, device=agent.device) \
-            if not if_discrete else th.zeros((horizon_len, num_seqs), dtype=th.int32).to(agent.device)
+            if not if_discrete else th.zeros((horizon_len, num_seqs, 1), dtype=th.int32).to(agent.device)
         rewards = th.zeros((horizon_len, num_seqs), dtype=th.float32, device=agent.device)
         undones = th.zeros((horizon_len, num_seqs), dtype=th.bool, device=agent.device)
         unmasks = th.zeros((horizon_len, num_seqs), dtype=th.bool, device=agent.device)
@@ -371,6 +371,8 @@ class Worker(Process):
         worker_id = self.worker_id
         th.set_grad_enabled(False)
 
+        print("worker_id {}".format(worker_id))
+
         '''init environment'''
         env = build_env(args.env_class, args.env_args, args.gpu_id)
 
@@ -379,8 +381,14 @@ class Worker(Process):
         if args.continue_train:
             agent.save_or_load_agent(args.cwd, if_save=False)
 
+        #print(env)
+        
+        
         '''init agent.last_state'''
-        state, info_dict = env.reset()
+        #state, info_dict = env.reset()
+        state = env.reset().astype(np.float16)
+
+
         if args.num_envs == 1:
             assert state.shape == (args.state_dim,)
             assert isinstance(state, np.ndarray)
@@ -400,6 +408,7 @@ class Worker(Process):
         del args
 
         while True:
+            print("worker_id {} IN THE LOOP".format(worker_id))
             '''Worker receive actor from Learner'''
             actor = self.recv_pipe.recv()
             if actor is None:
