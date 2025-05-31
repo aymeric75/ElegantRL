@@ -46,6 +46,9 @@ class AgentPPO(AgentBase):
             `undones.shape == (horizon_len, num_envs)`
             `unmasks.shape == (horizon_len, num_envs)`
         """
+
+        print("in _explore_one_env")
+
         states = th.zeros((horizon_len, self.state_dim), dtype=th.float32).to(self.device)
         actions = th.zeros((horizon_len, self.action_dim), dtype=th.float32).to(self.device) \
             if not self.if_discrete else th.zeros(horizon_len, dtype=th.int32).to(self.device)
@@ -98,6 +101,10 @@ class AgentPPO(AgentBase):
             `undones.shape == (horizon_len, num_envs)`
             `unmasks.shape == (horizon_len, num_envs)`
         """
+
+        print("in _explore_vec_env 0")
+
+
         states = th.zeros((horizon_len, self.num_envs, self.state_dim), dtype=th.float32).to(self.device)
         actions = th.zeros((horizon_len, self.num_envs, self.action_dim), dtype=th.float32).to(self.device) \
             if not self.if_discrete else th.zeros((horizon_len, self.num_envs), dtype=th.int32).to(self.device)
@@ -106,10 +113,15 @@ class AgentPPO(AgentBase):
         terminals = th.zeros((horizon_len, self.num_envs), dtype=th.bool).to(self.device)
         truncates = th.zeros((horizon_len, self.num_envs), dtype=th.bool).to(self.device)
 
+        print("in _explore_vec_env 1")
+
         state = self.last_state  # shape == (num_envs, state_dim) for a vectorized env.
 
+        print("horizon_len is {}".format(horizon_len)) # 1024
         convert = self.act.convert_action_for_env
+
         for t in range(horizon_len):
+
             action, logprob = self.explore_action(state)
 
             states[t] = state
@@ -118,14 +130,24 @@ class AgentPPO(AgentBase):
 
             state, reward, terminal, truncate, _ = env.step(convert(action))  # next_state
 
+      
             rewards[t] = reward
             terminals[t] = terminal
             truncates[t] = truncate
+
+            print("state.device")
+            print(state.device)
+            print(action.device)
+            exit()
+
 
         self.last_state = state
         rewards *= self.reward_scale
         undones = th.logical_not(terminals)
         unmasks = th.logical_not(truncates)
+
+        print("in unmasks t is {}".format(unmasks))
+
         return states, actions, logprobs, rewards, undones, unmasks
 
     def explore_action(self, state: TEN) -> tuple[TEN, TEN]:

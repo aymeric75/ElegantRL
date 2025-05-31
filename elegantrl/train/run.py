@@ -23,6 +23,8 @@ if os.name == 'nt':  # if is WindowOS (Windows NT)
 
 
 def train_agent(args: Config, if_single_process: bool = False):
+
+
     if if_single_process:
         print(f"| train_agent_single_process() with GPU_ID {args.gpu_id}", flush=True)
         train_agent_single_process(args)
@@ -140,6 +142,8 @@ def train_agent_single_process(args: Config):
 
 
 def train_agent_multiprocessing(args: Config):
+
+
     args.init_before_training()
 
     """Don't set method='fork' when send tensor in GPU"""
@@ -164,15 +168,18 @@ def train_agent_multiprocessing(args: Config):
 
 
 def train_agent_multiprocessing_multi_gpu(args: Config):
+
     args.init_before_training()
 
     """Don't set method='fork' when send tensor in GPU"""
     method = 'spawn' if os.name == 'nt' else 'forkserver'  # os.name == 'nt' means Windows NT operating system (WinOS)
     mp.set_start_method(method=method, force=True)
 
+
     learners_pipe = [Pipe(duplex=True) for _ in args.learner_gpu_ids]
     process_list_list = []
     for gpu_id in args.learner_gpu_ids:
+
         args = deepcopy(args)
         args.gpu_id = gpu_id
 
@@ -304,7 +311,8 @@ class Learner(Process):
 
             '''COMMUNICATE between Learners: Learner send actor to other Learners'''
             _buffer_len = num_envs * num_workers
-            _buffer_items_tensor = [t[:, :_buffer_len].cpu().detach_() for t in buffer_items_tensor]
+            #_buffer_items_tensor = [t[:, :_buffer_len].cpu().detach_() for t in buffer_items_tensor]
+            _buffer_items_tensor = [t[:, :_buffer_len].cpu().detach() for t in buffer_items_tensor] #### AYMERIC
             for shift_id in range(num_communications):
                 _learner_pipe = self.learners_pipe[learner_id][0]
                 _learner_pipe.send(_buffer_items_tensor)
@@ -378,6 +386,8 @@ class Worker(Process):
 
         '''init agent'''
         agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args)
+
+
         if args.continue_train:
             agent.save_or_load_agent(args.cwd, if_save=False)
 
@@ -392,6 +402,9 @@ class Worker(Process):
         print(state.shape)
         print(args.state_dim)
         print(args.num_envs)
+
+
+
         if args.num_envs == 1:
             assert state.shape == (args.state_dim,)
             assert isinstance(state, np.ndarray)
@@ -414,12 +427,28 @@ class Worker(Process):
             print("worker_id {} IN THE LOOP".format(worker_id))
             '''Worker receive actor from Learner'''
             actor = self.recv_pipe.recv()
+
+            print("THE ACTOR IS ")
+
+
             if actor is None:
                 break
             agent.act = actor.to(agent.device) if os.name == 'nt' else actor  # WindowsNT_OS can only send cpu_tensor
 
+            agent.if_vec_env = True
+
+            print("agentagentagentagentagent")
+            print(agent) # ElegantRL.elegantrl.agents.AgentPPO.AgentPPO
+
             '''Worker send the training data to Learner'''
             buffer_items = agent.explore_env(env, horizon_len)
+
+            print("buffer_items")
+            print(type(buffer_items))
+            print(len(buffer_items))
+            #print(buffer_items[0])
+            exit()
+
             last_state = agent.last_state
             if os.name == 'nt':  # WindowsNT_OS can only send cpu_tensor
                 buffer_items = [t.cpu() for t in buffer_items]

@@ -47,6 +47,15 @@ class AgentBase:
 
         self.explore_noise_std = getattr(args, 'explore_noise_std', 0.05)  # standard deviation of exploration noise
         self.last_state: Optional[TEN] = None  # last state of the trajectory. shape == (num_envs, state_dim)
+
+        print("ON EST OYUTA DE LAAAAAAAAAAAAAAAAAAAAAAAAA !!!!!!!!!!!!!!!!!")
+        print("gpu_id")
+        print(gpu_id)
+        print("str")
+        print(str(th.cuda.is_available()))
+        exit()
+
+
         self.device = th.device(f"cuda:{gpu_id}" if (th.cuda.is_available() and (gpu_id >= 0)) else "cpu")
 
         '''network'''
@@ -90,6 +99,7 @@ class AgentBase:
             `undones.shape == (horizon_len, num_envs)`
             `unmasks.shape == (horizon_len, num_envs)`
         """
+
         states = th.zeros((horizon_len, self.state_dim), dtype=th.float32).to(self.device)
         actions = th.zeros((horizon_len, self.action_dim), dtype=th.float32).to(self.device) \
             if not self.if_discrete else th.zeros(horizon_len, dtype=th.int32).to(self.device)
@@ -141,6 +151,7 @@ class AgentBase:
             `undones.shape == (horizon_len, num_envs)`
             `unmasks.shape == (horizon_len, num_envs)`
         """
+
         states = th.zeros((horizon_len, self.num_envs, self.state_dim), dtype=th.float32).to(self.device)
         actions = th.zeros((horizon_len, self.num_envs, self.action_dim), dtype=th.float32).to(self.device) \
             if not self.if_discrete else th.zeros((horizon_len, self.num_envs), dtype=th.int32).to(self.device)
