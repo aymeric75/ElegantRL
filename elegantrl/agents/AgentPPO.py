@@ -102,7 +102,6 @@ class AgentPPO(AgentBase):
             `unmasks.shape == (horizon_len, num_envs)`
         """
 
-        print("in _explore_vec_env 0")
 
 
         states = th.zeros((horizon_len, self.num_envs, self.state_dim), dtype=th.float32).to(self.device)
@@ -113,18 +112,22 @@ class AgentPPO(AgentBase):
         terminals = th.zeros((horizon_len, self.num_envs), dtype=th.bool).to(self.device)
         truncates = th.zeros((horizon_len, self.num_envs), dtype=th.bool).to(self.device)
 
-        print("in _explore_vec_env 1")
+        #print("in _explore_vec_env 1")
 
         state = self.last_state  # shape == (num_envs, state_dim) for a vectorized env.
 
-        print("horizon_len is {}".format(horizon_len)) # 1024
+
+        #print("horizon_len is {}".format(horizon_len)) # 1024
         convert = self.act.convert_action_for_env
 
         for t in range(horizon_len):
 
+            #print("t is {}".format(str(t)))
+
             action, logprob = self.explore_action(state)
 
-            states[t] = state
+
+            states[t] = state[0]
             actions[t] = action
             logprobs[t] = logprob
 
@@ -135,10 +138,7 @@ class AgentPPO(AgentBase):
             terminals[t] = terminal
             truncates[t] = truncate
 
-            print("state.device")
-            print(state.device)
-            print(action.device)
-            exit()
+
 
 
         self.last_state = state
@@ -146,7 +146,7 @@ class AgentPPO(AgentBase):
         undones = th.logical_not(terminals)
         unmasks = th.logical_not(truncates)
 
-        print("in unmasks t is {}".format(unmasks))
+        #print("in unmasks t is {}".format(unmasks))
 
         return states, actions, logprobs, rewards, undones, unmasks
 
@@ -179,6 +179,12 @@ class AgentPPO(AgentBase):
 
         th.set_grad_enabled(True)
         update_times = int(buffer_size * self.repeat_times / self.batch_size)
+        # print(update_times)
+        # print(buffer_size)
+        # print(buffer_size)
+        # print(buffer_size)
+        # print(self.batch_size)
+        # print(self.repeat_times)
         assert update_times >= 1
         for update_t in range(update_times):
             obj_critic, obj_actor, obj_entropy = self.update_objectives(buffer, update_t)
@@ -380,6 +386,7 @@ class ActorPPO(th.nn.Module):
         self.state_std = nn.Parameter(th.ones((state_dim,)), requires_grad=False)
 
     def state_norm(self, state: TEN) -> TEN:
+        state = state[0]
         return (state - self.state_avg) / (self.state_std + 1e-4)
 
     def forward(self, state: TEN) -> TEN:
@@ -388,6 +395,10 @@ class ActorPPO(th.nn.Module):
         return self.convert_action_for_env(action)
 
     def get_action(self, state: TEN) -> tuple[TEN, TEN]:  # for exploration
+
+        # print("STATEEEE ")
+        # print(state)
+        # exit()
         state = self.state_norm(state)
         action_avg = self.net(state)
         action_std = self.action_std_log.exp()

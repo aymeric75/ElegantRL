@@ -54,6 +54,16 @@ class Evaluator:
             self.tensorboard = None
 
     def evaluate_and_save(self, actor: th.nn, steps: int, exp_r: float, logging_tuple: tuple):
+
+
+        #print("8888888888888888888888888888")
+        # print(self.total_step) # 64
+        # print(steps) # 64
+        # print(self.recorder_step) # 0 (^^)
+        # print(self.eval_step_counter) # -64
+        # print(self.eval_per_step) # 64
+
+
         self.total_step += steps  # update total training steps
 
         if self.total_step < self.recorder_step:
@@ -61,7 +71,9 @@ class Evaluator:
         if self.total_step < self.eval_step_counter + self.eval_per_step:
             return
 
+
         self.eval_step_counter = self.total_step
+
 
         rewards_step_ten = self.get_cumulative_rewards_and_step(actor)
 
@@ -76,8 +88,12 @@ class Evaluator:
         value_tuple = [v for v in logging_tuple if isinstance(v, (int, float))]
         logging_str = logging_tuple[-1]
 
+        #print("BEFORE TENSORBOARD")
+
         '''record the training information'''
         self.recorder.append((self.total_step, avg_r, std_r, exp_r, *value_tuple))  # update recorder
+
+
         if self.tensorboard:
             self.tensorboard.add_scalar("info/critic_loss_sample", value_tuple[0], self.total_step)
             self.tensorboard.add_scalar("info/actor_obj_sample", -1 * value_tuple[1], self.total_step)
@@ -90,6 +106,8 @@ class Evaluator:
             self.tensorboard.add_scalar("reward/avg_reward_time", avg_r, train_time)
             self.tensorboard.add_scalar("reward/std_reward_time", std_r, train_time)
             self.tensorboard.add_scalar("reward/exp_reward_time", exp_r, train_time)
+
+        #print("AFTER TENSORBOARD")
 
         '''print some information to Terminal'''
         prev_max_r = self.max_r
@@ -135,7 +153,7 @@ class Evaluator:
     def get_cumulative_rewards_and_step_single_env(self, actor) -> TEN:
         rewards_steps_list = [get_rewards_and_steps(self.env, actor) for _ in range(self.eval_times)]
         rewards_steps_ten = th.tensor(rewards_steps_list, dtype=th.float32)
-        return rewards_steps_ten  # rewards_steps_ten.shape[1] == 2
+        return rewards_steps_ten  # rewards_steps_ten.shape[1] == 2def 
 
     def get_cumulative_rewards_and_step_vectorized_env(self, actor) -> TEN:
         rewards_step_list = [get_cumulative_rewards_and_step_from_vec_env(self.env, actor)
@@ -198,15 +216,22 @@ def get_rewards_and_steps(env, actor, if_render: bool = False) -> Tuple[float, i
 
 
 def get_cumulative_rewards_and_step_from_vec_env(env, actor) -> List[Tuple[float, int]]:
+
     device = env.device
     env_num = env.num_envs
     max_step = env.max_step
     '''get returns and dones (GPU)'''
     returns = th.empty((max_step, env_num), dtype=th.float32, device=device)
     dones = th.empty((max_step, env_num), dtype=th.bool, device=device)
-
     state, info_dict = env.reset()  # must reset in vectorized env
+    #print("MAX STEPS: {}".format(max_step))
+    # 19539
+
+
     for t in range(max_step):
+
+        #print("get_cumulative_rewards_and_step_from_vec_env  {}/{}".format(t, max_step))
+
         action = actor(state.to(device))
         # assert action.shape == (num_envs, ) if if_discrete else (num_envs, action_dim)
         state, reward, terminal, truncate, info_dict = env.step(action)

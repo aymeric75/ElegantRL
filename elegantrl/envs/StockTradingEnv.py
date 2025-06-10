@@ -271,12 +271,24 @@ class StockTradingVecEnv:
         # action = action.clone()
         action = th.ones_like(action)
         action[(-0.1 < action) & (action < 0.1)] = 0
+
+
+
         action_int = (action * self.max_stock).to(th.int32)
+
+
+        # print("action_int")
+        # print(action_int)
         # actions initially is scaled between -1 and 1
         # convert `action` into integer as `stock_action`, because we can't buy fraction of shares
-
+  
         for i in range(self.num_shares):
-            buy_idx = th.where(action_int[:, i] > 0)[0]
+            try:
+                buy_idx = th.where(action_int[:, i] > 0)[0]
+            
+            except:
+                continue
+
             if buy_idx.shape[0] > 0:
                 part_amount = self.amount[buy_idx]
                 part_shares = self.shares[buy_idx, i]

@@ -243,6 +243,7 @@ class Learner(Process):
 
         '''Learner init agent'''
         agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args)
+
         if args.continue_train:
             agent.save_or_load_agent(args.cwd, if_save=False)
 
@@ -260,6 +261,8 @@ class Learner(Process):
         else:
             buffer = []
 
+
+
         '''loop'''
         if_off_policy = args.if_off_policy
         if_discrete = args.if_discrete
@@ -268,7 +271,7 @@ class Learner(Process):
         num_workers = args.num_workers
         num_envs = args.num_envs
         num_steps = args.horizon_len * args.num_workers
-        num_seqs = args.num_envs * args.num_workers * num_learners
+        num_seqs = args.num_envs * args.num_workers * num_learners # plusieurs envs par worker 
 
         state_dim = args.state_dim
         action_dim = args.action_dim
@@ -277,6 +280,7 @@ class Learner(Process):
         del args
 
         agent.last_state = th.empty((num_seqs, state_dim), dtype=th.float32, device=agent.device)
+
 
         states = th.zeros((horizon_len, num_seqs, state_dim), dtype=th.float32, device=agent.device)
         actions = th.zeros((horizon_len, num_seqs, action_dim), dtype=th.float32, device=agent.device) \
@@ -290,23 +294,36 @@ class Learner(Process):
             logprobs = th.zeros((horizon_len, num_seqs), dtype=th.float32, device=agent.device)
             buffer_items_tensor = (states, actions, logprobs, rewards, undones, unmasks)
 
+  
         if_train = True
         while if_train:
+            
+
             actor = agent.act
             actor = deepcopy(actor).cpu() if os.name == 'nt' else actor  # WindowsNT_OS can only send cpu_tensor
 
             '''Learner send actor to Workers'''
             for send_pipe in self.send_pipes:
+                #print("1111111111111111111111111111 (send actor)")
                 send_pipe.send(actor)
             '''Learner receive (buffer_items, last_state) from Workers'''
+
+
             for _ in range(num_workers):
+
                 worker_id, buffer_items, last_state = self.recv_pipe.recv()
+                #print("44444444444444444444 (Learner received buffer)")
 
                 buf_i = num_envs * worker_id
                 buf_j = num_envs * (worker_id + 1)
                 for buffer_item, buffer_tensor in zip(buffer_items, buffer_items_tensor):
                     buffer_tensor[:, buf_i:buf_j] = buffer_item.to(agent.device)
+      
+                last_state = last_state[0]
                 agent.last_state[buf_i:buf_j] = last_state.to(agent.device)
+
+
+
             del buffer_items, last_state
 
             '''COMMUNICATE between Learners: Learner send actor to other Learners'''
@@ -327,6 +344,12 @@ class Learner(Process):
                 for buffer_item, buffer_tensor in zip(_buffer_items_tensor, buffer_items_tensor):
                     buffer_tensor[:, _buf_i:_buf_j] = buffer_item.to(agent.device)
 
+            # print('buffer_items_tensorbuffer_items_tensorbuffer_items_tensor')
+            # print(len(buffer_items_tensor))
+            # print(buffer_items_tensor[0].shape)
+            # exit()
+
+
             '''Learner update training data to (buffer, agent)'''
             if if_off_policy:
                 buffer.update(buffer_items_tensor)
@@ -336,6 +359,7 @@ class Learner(Process):
             '''Learner update network using training data'''
             th.set_grad_enabled(True)
             logging_tuple = agent.update_net(buffer)
+
             th.set_grad_enabled(False)
 
             '''Learner receive training signal from Evaluator'''
@@ -348,7 +372,14 @@ class Learner(Process):
 
             '''Learner send actor and training log to Evaluator'''
             if if_train:
+
+                # print("66666666666666666666666 (Learner sends logs to Evaluator)")
+                # print("num_steps: {}".format(str(num_steps)))  ##### 64
+
                 exp_r = buffer_items_tensor[2].mean().item()  # the average rewards of exploration
+                #print(buffer_items_tensor[0].shape) # torch.Size([64, 2, 721])
+                # buffer_items_tensor = (states, actions, rewards, undones, unmasks)
+
                 self.eval_pipe.send((actor, num_steps, exp_r, logging_tuple))
 
         '''Learner send the terminal signal to workers after break the loop'''
@@ -366,6 +397,7 @@ class Learner(Process):
         print("| Learner Closed", flush=True)
 
 
+
 class Worker(Process):
     def __init__(self, worker_pipe: Pipe, learner_pipe: Pipe, worker_id: int, args: Config):
         super().__init__()
@@ -378,14 +410,15 @@ class Worker(Process):
         args = self.args
         worker_id = self.worker_id
         th.set_grad_enabled(False)
-
-        print("worker_id {}".format(worker_id))
+        
+        #print("worker_id {}".format(worker_id))
 
         '''init environment'''
         env = build_env(args.env_class, args.env_args, args.gpu_id)
 
         '''init agent'''
         agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args)
+
 
 
         if args.continue_train:
@@ -398,13 +431,6 @@ class Worker(Process):
         #state, info_dict = env.reset()   .astype(np.float16)
         state, info_dict = env.reset()
 
-        print("OULAH !!!!")
-        print(state.shape)
-        print(args.state_dim)
-        print(args.num_envs)
-
-
-
         if args.num_envs == 1:
             assert state.shape == (args.state_dim,)
             assert isinstance(state, np.ndarray)
@@ -413,6 +439,7 @@ class Worker(Process):
             assert state.shape == (args.num_envs, args.state_dim)
             assert isinstance(state, th.Tensor)
             state = state.to(agent.device)
+            
         assert state.shape == (args.num_envs, args.state_dim)
         assert isinstance(state, th.Tensor)
         agent.last_state = state.detach()
@@ -424,39 +451,41 @@ class Worker(Process):
         del args
 
         while True:
-            print("worker_id {} IN THE LOOP".format(worker_id))
+
+
+
+            #print("worker_id {} IN THE LOOP".format(worker_id))
             '''Worker receive actor from Learner'''
             actor = self.recv_pipe.recv()
-
-            print("THE ACTOR IS ")
-
-
+        
+            
             if actor is None:
                 break
-            agent.act = actor.to(agent.device) if os.name == 'nt' else actor  # WindowsNT_OS can only send cpu_tensor
 
+
+            #print("222222222222222222 (receivED actor)")
+
+            agent.act = actor.to(agent.device) if os.name == 'nt' else actor  # WindowsNT_OS can only send cpu_tensor
             agent.if_vec_env = True
 
-            print("agentagentagentagentagent")
-            print(agent) # ElegantRL.elegantrl.agents.AgentPPO.AgentPPO
-
             '''Worker send the training data to Learner'''
-            buffer_items = agent.explore_env(env, horizon_len)
-
-            print("buffer_items")
-            print(type(buffer_items))
-            print(len(buffer_items))
-            #print(buffer_items[0])
-            exit()
+            buffer_items = agent.explore_env(env, horizon_len) # states, actions, rewards, undones, unmasks
 
             last_state = agent.last_state
             if os.name == 'nt':  # WindowsNT_OS can only send cpu_tensor
                 buffer_items = [t.cpu() for t in buffer_items]
                 last_state = deepcopy(last_state).cpu()
+
+            #print("3333333333333333 (gonna send BUFFER ITEMS)")
+
+
+            # print(buffer_items[0].shape) # torch.Size([64, 2, 721])
+            # print(buffer_items[1].shape) # torch.Size([64, 2, 80])
+
             self.send_pipe.send((worker_id, buffer_items, last_state))
 
         env.close() if hasattr(env, 'close') else None
-        print(f"| Worker-{self.worker_id} Closed", flush=True)
+        print(f"| Worker-{self.worker_id} Closedddddd", flush=True)
 
 
 class EvaluatorProc(Process):
@@ -476,6 +505,9 @@ class EvaluatorProc(Process):
         eval_env = build_env(eval_env_class, eval_env_args, args.gpu_id)
         evaluator = Evaluator(cwd=args.cwd, env=eval_env, args=args, if_tensorboard=False)
 
+        # print("eval_env_class") 
+        # print(eval_env_class) # StockTradingVecEnv
+
         '''loop'''
         cwd = args.cwd
         break_step = args.break_step
@@ -486,12 +518,14 @@ class EvaluatorProc(Process):
         while if_train:
             '''Evaluator receive training log from Learner'''
             actor, steps, exp_r, logging_tuple = self.pipe0.recv()
+            #print("7777777777777777777   Evaluator received training logs")
 
             '''Evaluator evaluate the actor and save the training log'''
             if actor is None:
                 evaluator.total_step += steps  # update total_step but don't update recorder
             else:
                 actor = actor.to(device) if os.name == 'nt' else actor  # WindowsNT_OS can only send cpu_tensor
+                #print("BEFORE ENTERING evaluate_and_save")
                 evaluator.evaluate_and_save(actor, steps, exp_r, logging_tuple)
 
             '''Evaluator send the training signal to Learner'''

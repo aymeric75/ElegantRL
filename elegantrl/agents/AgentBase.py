@@ -48,12 +48,7 @@ class AgentBase:
         self.explore_noise_std = getattr(args, 'explore_noise_std', 0.05)  # standard deviation of exploration noise
         self.last_state: Optional[TEN] = None  # last state of the trajectory. shape == (num_envs, state_dim)
 
-        print("ON EST OYUTA DE LAAAAAAAAAAAAAAAAAAAAAAAAA !!!!!!!!!!!!!!!!!")
-        print("gpu_id")
-        print(gpu_id)
-        print("str")
-        print(str(th.cuda.is_available()))
-        exit()
+        
 
 
         self.device = th.device(f"cuda:{gpu_id}" if (th.cuda.is_available() and (gpu_id >= 0)) else "cpu")
